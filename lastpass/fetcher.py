@@ -3,6 +3,7 @@ import hashlib
 from base64 import b64decode
 from binascii import hexlify
 import requests
+import json
 from xml.etree import ElementTree as etree
 from . import blob
 from .exceptions import (
@@ -16,7 +17,6 @@ from .exceptions import (
     LastPassUnknownError
 )
 from .session import Session
-
 
 http = requests
 
@@ -46,6 +46,25 @@ def fetch(session, web_client=http):
 
     return blob.Blob(decode_blob(response.content), session.key_iteration_count)
 
+def groups(session, web_client=http):
+    response = web_client.get('https://lastpass.com/teams-api/my-company/groups',
+                              headers={'x-csrf-token': session.token},
+                              cookies={'PHPSESSID': session.id})
+
+
+    if response.status_code != requests.codes.ok:
+        raise NetworkError()
+    return json.loads(response.content)
+
+def users(session, group,  web_client=http):
+    response = web_client.get('https://lastpass.com/teams-api/my-company/groupusers/%s'%group,
+                              headers={'x-csrf-token': session.token},
+                              cookies={'PHPSESSID': session.id})
+
+
+    if response.status_code != requests.codes.ok:
+        raise NetworkError()
+    return json.loads(response.content)
 
 def request_iteration_count(username, web_client=http):
     response = web_client.post('https://lastpass.com/iterations.php',
@@ -96,14 +115,21 @@ def request_login(username, password, key_iteration_count, multifactor_password=
     session = create_session(parsed_response, key_iteration_count)
     if not session:
         raise login_error(parsed_response)
+
+    response = web_client.get('https://lastpass.com/teams-api/csrf', 
+                                cookies={'PHPSESSID': session.id})
+    token_json = json.loads(response.content)
+
+    session = create_session(parsed_response, session.key_iteration_count, token_json['token'])
+
     return session
 
 
-def create_session(parsed_response, key_iteration_count):
+def create_session(parsed_response, key_iteration_count, token=None):
     if parsed_response.tag == 'ok':
         session_id = parsed_response.attrib.get('sessionid')
         if isinstance(session_id, str):
-            return Session(session_id, key_iteration_count)
+            return Session(session_id, key_iteration_count, token)
 
 
 def login_error(parsed_response):

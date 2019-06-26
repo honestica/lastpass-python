@@ -12,6 +12,11 @@ class Vault(object):
         return cls.open(blob, username, password)
 
     @classmethod
+    def open_audit(cls, username, password, multifactor_password=None, client_id=None):
+        response = cls.fetch_groups(username, password, multifactor_password, client_id)
+        return response
+
+    @classmethod
     def open_local(cls, blob_filename, username, password):
         """Creates a vault from a locally stored blob"""
         # TODO: read the blob here
@@ -30,6 +35,14 @@ class Vault(object):
         fetcher.logout(session)
 
         return blob
+
+    @classmethod
+    def fetch_groups(cls, username, password, multifactor_password=None, client_id=None):
+        session = fetcher.login(username, password, multifactor_password, client_id)
+        response = fetcher.groups(session)
+        fetcher.logout(session)
+
+        return response
 
     def __init__(self, blob, encryption_key):
         """This more of an internal method, use one of the static constructors instead"""
